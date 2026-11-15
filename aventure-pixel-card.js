@@ -8,7 +8,7 @@
  * meilleur score mémorisé (et facultativement envoyé dans un input_number).
  * Style verre, thème clair/sombre automatique, éditeur visuel, textes en français.
  */
-const CARD_VERSION = "1.0.1";
+const CARD_VERSION = "1.0.2";
 
 /* === NUANCE COMMUNE v2 (cartes Johan854) === */
 const GV_NUANCES = [["braise", "Braise (rouge)", "#e0524f"], ["ocean", "Océan (bleu)", "#2f8fd8"], ["lagon", "Lagon (turquoise)", "#1fb5a8"], ["foret", "Forêt (vert)", "#3fae5a"], ["lavande", "Lavande (violet)", "#8a63d8"], ["framboise", "Framboise (rose)", "#e05597"], ["ambre", "Ambre (orange)", "#e8902c"], ["ardoise", "Ardoise (neutre)", "#7d8595"]];
@@ -606,7 +606,7 @@ class AventurePixelCard extends HTMLElement {
     // commandes tactiles
     r.querySelectorAll(".pad button").forEach((b) => {
       const k = b.dataset.k;
-      const on = (e) => { e.preventDefault(); this._unlock(); this._game.keys[k] = true; b.classList.add("on"); if (k === "j" && this._game.state !== "jeu") this._go(); };
+      const on = (e) => { e.preventDefault(); this._unlock(); this._game.keys[k] = true; b.classList.add("on"); if (k === "j" && this._game.state !== "jeu" && !r.getElementById("msg").hidden) this._go(); };
       const off = (e) => { e.preventDefault(); this._game.keys[k] = false; b.classList.remove("on"); };
       b.addEventListener("pointerdown", on); ["pointerup", "pointercancel", "pointerleave"].forEach((ev) => b.addEventListener(ev, off));
       b.addEventListener("contextmenu", (e) => e.preventDefault());
@@ -631,7 +631,7 @@ class AventurePixelCard extends HTMLElement {
     const tag = (e.composedPath && e.composedPath()[0] && e.composedPath()[0].tagName) || "";
     if (/INPUT|TEXTAREA|SELECT/.test(tag)) return;
     if (down && (e.code === "KeyP" || e.code === "Escape")) { if (this._game.state === "jeu") this._pause(); else if (this._game.state === "pause") this._go(); return; }
-    if (down && (e.code === "Enter" || e.code === "Space") && this._game.state !== "jeu") { e.preventDefault(); this._unlock(); this._go(); return; }
+    if (down && (e.code === "Enter" || e.code === "Space") && this._game.state !== "jeu" && !this.shadowRoot.getElementById("msg").hidden) { e.preventDefault(); this._unlock(); this._go(); return; }
     const k = map[e.code]; if (!k) return;
     if (!down) { this._game.keys[k] = false; return; }
     if (this._game.state !== "jeu") return;
@@ -649,9 +649,9 @@ class AventurePixelCard extends HTMLElement {
     if (ev === "niveau") {
       const le = this._config.light_entity;
       if (le && this._hass) this._hass.callService("light", "turn_on", { entity_id: le, flash: "short" });
-      setTimeout(() => this._msg("gagne"), 700);
-    } else if (ev === "vie") setTimeout(() => this._msg("perdu"), 700);
-    else if (ev === "fin") { const rec = this._saveBest(g.score); this._updBest(); setTimeout(() => this._msg(rec ? "record" : "fin"), 900); }
+      setTimeout(() => { if (g.state === "gagne") this._msg("gagne"); }, 700);
+    } else if (ev === "vie") setTimeout(() => { if (g.state === "perdu") this._msg("perdu"); }, 700);
+    else if (ev === "fin") { const rec = this._saveBest(g.score); this._updBest(); setTimeout(() => { if (g.state === "fin") this._msg(rec ? "record" : "fin"); }, 900); }
   }
   _msg(kind) {
     const r = this.shadowRoot, m = r.getElementById("msg"), g = this._game, th = THEMES[this._config.hero];
