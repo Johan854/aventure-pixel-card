@@ -8,7 +8,7 @@
  * meilleur score mémorisé (et facultativement envoyé dans un input_number).
  * Style verre, thème clair/sombre automatique, éditeur visuel, textes en français.
  */
-const CARD_VERSION = "1.0.2";
+const CARD_VERSION = "1.0.3";
 
 /* === NUANCE COMMUNE v2 (cartes Johan854) === */
 const GV_NUANCES = [["braise", "Braise (rouge)", "#e0524f"], ["ocean", "Océan (bleu)", "#2f8fd8"], ["lagon", "Lagon (turquoise)", "#1fb5a8"], ["foret", "Forêt (vert)", "#3fae5a"], ["lavande", "Lavande (violet)", "#8a63d8"], ["framboise", "Framboise (rose)", "#e05597"], ["ambre", "Ambre (orange)", "#e8902c"], ["ardoise", "Ardoise (neutre)", "#7d8595"]];
@@ -336,17 +336,20 @@ class Game {
     const map = Array.from({ length: ROWS }, () => Array(W).fill("."));
     const items = [], enemies = [];
     const ground = (x, top) => { for (let y = top; y < ROWS; y++) map[y][x] = "#"; };
-    let x = 0, top = 7;
+    let x = 0, top = 7, apresTrou = false;
     while (x < 8) ground(x++, top);
     const pGap = Math.min(0.12 + lv * 0.02, 0.28) * df.gaps, pEn = Math.min(0.25 + lv * 0.05, 0.6) * df.enemies;
     while (x < W - 14) {
       const k = r();
-      if (k < pGap && x > 10) { // trou
+      if (k < pGap && x > 10 && !apresTrou) { // trou : 2 ou 3 cases au plus, jamais deux trous à la suite
         const g = 2 + (r() < 0.3 + lv * 0.05 ? 1 : 0); for (let i = 0; i < g; i++) x++;
         items.push({ x: (x - g / 2) * T, y: (top - 2) * T, got: false });
+        apresTrou = true;
         continue;
       }
-      if (k < pGap + 0.15) { const nt = Math.max(5, Math.min(7, top + (r() < 0.5 ? -1 : 1))); top = nt; }
+      // pas de marche qui monte juste après un trou
+      if (k < pGap + 0.15 && !apresTrou) { const nt = Math.max(5, Math.min(7, top + (r() < 0.5 ? -1 : 1))); top = nt; }
+      apresTrou = false;
       const len = 4 + Math.floor(r() * 6);
       for (let i = 0; i < len && x < W - 14; i++, x++) {
         ground(x, top);
