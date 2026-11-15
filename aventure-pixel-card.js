@@ -8,7 +8,7 @@
  * meilleur score mémorisé (et facultativement envoyé dans un input_number).
  * Style verre, thème clair/sombre automatique, éditeur visuel, textes en français.
  */
-const CARD_VERSION = "1.0.3";
+const CARD_VERSION = "1.1.0";
 
 /* === NUANCE COMMUNE v2 (cartes Johan854) === */
 const GV_NUANCES = [["braise", "Braise (rouge)", "#e0524f"], ["ocean", "Océan (bleu)", "#2f8fd8"], ["lagon", "Lagon (turquoise)", "#1fb5a8"], ["foret", "Forêt (vert)", "#3fae5a"], ["lavande", "Lavande (violet)", "#8a63d8"], ["framboise", "Framboise (rose)", "#e05597"], ["ambre", "Ambre (orange)", "#e8902c"], ["ardoise", "Ardoise (neutre)", "#7d8595"]];
@@ -43,6 +43,8 @@ const DEFAULTS = {
   sound: true,
   light_entity: "", // lumière qui clignote quand un niveau est terminé
   best_score_entity: "", // input_number qui garde le meilleur score
+  unlock_entity: "", // compteur d'étoiles bonus : le jeu n'est jouable que s'il en reste (rien n'est dépensé)
+  unlock_min: 1,
 };
 
 /* ---------- Écran et tuiles ---------- */
@@ -533,7 +535,12 @@ class AventurePixelCard extends HTMLElement {
   set hass(h) {
     this._hass = h;
     if (!this._built && this._config) this._build();
-    if (this._card) { const d = this._isDark(); this._card.className = d ? "dark" : "light"; this._card.setAttribute("style", gvStyle(this._config, d)); this._updBest(); }
+    if (this._card) {
+      const d = this._isDark(); this._card.className = d ? "dark" : "light"; this._card.setAttribute("style", gvStyle(this._config, d)); this._updBest();
+      // verrou des étoiles : on rafraîchit l'écran d'accueil / de fin si l'état change
+      const lk = this._locked() + "|" + this._stars();
+      if (lk !== this._lockSig) { this._lockSig = lk; const g = this._game; if (g && (g.state === "titre" || g.state === "fin") && !this.shadowRoot.getElementById("msg").hidden) this._msg(this._lastMsg || "titre"); }
+    }
   }
   getCardSize() { return 6; }
   connectedCallback() { if (this._config && !this._built) this._build(); this._startLoop(); }
@@ -544,6 +551,13 @@ class AventurePixelCard extends HTMLElement {
     const dm = this._hass && this._hass.themes && this._hass.themes.darkMode;
     return typeof dm === "boolean" ? dm : !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
   }
+  _locked() {
+    const e = this._config.unlock_entity; if (!e) return false;
+    const s = this._hass && this._hass.states[e];
+    const v = s ? Number(s.state) : NaN;
+    return !(Number.isFinite(v) && v >= (Number(this._config.unlock_min) || 1));
+  }
+  _stars() { const s = this._hass && this._config.unlock_entity && this._hass.states[this._config.unlock_entity]; const v = s ? Number(s.state) : NaN; return Number.isFinite(v) ? v : 0; }
   _storeKey() { return "aventure-pixel-best-" + this._config.hero + "-" + (this._config.player || "x"); }
   _best() {
     let b = 0; try { b = Number(localStorage.getItem(this._storeKey())) || 0; } catch (e) { /* stockage indisponible */ }
@@ -580,6 +594,7 @@ class AventurePixelCard extends HTMLElement {
       .msg { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.4em; text-align:center; color:#fff; background:rgba(10,12,24,.55); cursor:pointer; padding:1em; }
       .msg[hidden] { display:none; } .msg b { font-size:1.4em; text-shadow:0 2px 0 rgba(0,0,0,.4); } .msg span { font-size:.85em; opacity:.9; }
       .msg .go { margin-top:.4em; padding:.5em 1.2em; border-radius:2em; background:var(--ac); color:#fff; font-weight:700; }
+      .msg .go.lock { background:rgba(255,255,255,.18); color:#fff; } .msg span { max-width:30em; }
       .pad { display:flex; justify-content:space-between; gap:10px; touch-action:none; }
       .pad div { display:flex; gap:8px; }
       .pad button { font:inherit; color:var(--tx); width:3.4em; height:3.4em; border-radius:50%; border:1px solid var(--fib); background:var(--fi); font-size:1.05em; font-weight:700; display:grid; place-items:center; touch-action:none; -webkit-tap-highlight-color:transparent; cursor:pointer; }
@@ -645,6 +660,7 @@ class AventurePixelCard extends HTMLElement {
     const g = this._game;
     if (g.state === "pause") { g.state = "jeu"; this._msg(null); return; }
     if (g.state === "jeu") return;
+    if ((g.state === "titre" || g.state === "fin") && this._locked()) return; // nouvelle partie : il faut des étoiles
     ACTIVE = this; g.start(); this._msg(null); this._hud(); this._screen.focus({ preventScroll: true });
   }
   _event(ev) {
@@ -659,16 +675,23 @@ class AventurePixelCard extends HTMLElement {
   _msg(kind) {
     const r = this.shadowRoot, m = r.getElementById("msg"), g = this._game, th = THEMES[this._config.hero];
     if (!kind) { m.hidden = true; return; }
+    this._lastMsg = kind;
     Object.keys(g.keys).forEach((k) => { g.keys[k] = false; }); r.querySelectorAll(".pad button.on").forEach((b) => b.classList.remove("on"));
     const tx = {
-      titre: [th.title, `Aide ${th.hero} à ramasser des ${th.itemName} jusqu'au drapeau. Saute sur les ennemis, attrape le bloc surprise pour pouvoir tirer.`, "Jouer"],
+      titre: [th.title, `Aide ${th.hero} à ramasser des ${th.itemName} jusqu'au drapeau. Saute sur les ennemis, cogne les caisses à étoile pour pouvoir tirer.`, "Jouer"],
       pause: ["Pause", "Le jeu attend sagement.", "Reprendre"],
       perdu: ["Aïe !", `Encore ${g.lives} vie${g.lives > 1 ? "s" : ""}.`, "Réessayer"],
       gagne: [`Niveau ${g.level} réussi !`, `Score : ${g.score}`, "Niveau suivant"],
       fin: ["Partie terminée", `Score : ${g.score} · Niveau ${g.level}`, "Rejouer"],
       record: ["Nouveau record !", `Score : ${g.score} · Niveau ${g.level}`, "Rejouer"],
     }[kind];
+    if ((kind === "titre" || kind === "fin" || kind === "record") && this._locked()) {
+      const mn = Number(this._config.unlock_min) || 1, n = this._stars();
+      tx[1] = `${kind === "titre" ? "" : tx[1] + " — "}Il faut au moins ${mn} étoile${mn > 1 ? "s" : ""} bonus pour lancer une partie (tu en as ${n}). Jouer ne dépense pas d'étoile.`;
+      tx[2] = "Verrouillé";
+    }
     r.getElementById("m1").textContent = tx[0]; r.getElementById("m2").textContent = tx[1]; r.getElementById("m3").textContent = tx[2];
+    r.getElementById("m3").classList.toggle("lock", tx[2] === "Verrouillé");
     m.hidden = false;
   }
   _hud() {
@@ -697,7 +720,7 @@ class AventurePixelCard extends HTMLElement {
 }
 
 /* ---------- Éditeur visuel ---------- */
-const LABELS = { ...GV_LABELS, name: "Titre (facultatif)", hero: "Héros", player: "Prénom du joueur (facultatif)", difficulty: "Difficulté", lives: "Nombre de vies", sound: "Sons", light_entity: "Lumière qui clignote à chaque niveau réussi (facultatif)", best_score_entity: "input_number du meilleur score (facultatif)", theme: "Thème" };
+const LABELS = { ...GV_LABELS, name: "Titre (facultatif)", hero: "Héros", player: "Prénom du joueur (facultatif)", difficulty: "Difficulté", lives: "Nombre de vies", sound: "Sons", light_entity: "Lumière qui clignote à chaque niveau réussi (facultatif)", best_score_entity: "input_number du meilleur score (facultatif)", unlock_entity: "Étoiles bonus nécessaires pour jouer : compteur (facultatif, rien n'est dépensé)", unlock_min: "Étoiles minimum pour jouer", theme: "Thème" };
 class AventurePixelCardEditor extends HTMLElement {
   setConfig(config) { this._config = { ...DEFAULTS, ...config }; if (!this._form) this._build(); else this._form.data = this._config; }
   set hass(h) { this._hass = h; if (this._form) this._form.hass = h; }
@@ -717,12 +740,15 @@ class AventurePixelCardEditor extends HTMLElement {
         { name: "theme", selector: { select: { mode: "dropdown", options: [{ value: "auto", label: "Automatique" }, { value: "light", label: "Clair" }, { value: "dark", label: "Sombre" }] } } }] },
       { name: "light_entity", selector: { entity: { domain: "light" } } },
       { name: "best_score_entity", selector: { entity: { domain: ["input_number", "number"] } } },
+      { type: "grid", name: "", schema: [
+        { name: "unlock_entity", selector: { entity: { domain: ["counter", "input_number", "number", "sensor"] } } },
+        { name: "unlock_min", selector: { number: { min: 1, max: 20, step: 1, mode: "box" } } }] },
       { type: "expandable", name: "", title: "Nuance de couleur", schema: GV_FIELDS },
     ];
     el.addEventListener("value-changed", (ev) => {
       ev.stopPropagation();
       const cfg = { ...ev.detail.value };
-      ["name", "player", "light_entity", "best_score_entity"].forEach((k) => { if (!cfg[k]) delete cfg[k]; });
+      ["name", "player", "light_entity", "best_score_entity", "unlock_entity"].forEach((k) => { if (!cfg[k]) delete cfg[k]; });
       this._config = cfg;
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: cfg }, bubbles: true, composed: true }));
     });

@@ -23,6 +23,7 @@ hero: cube
 player: Logan
 difficulty: difficile
 best_score_entity: input_number.record_logan   # facultatif
+unlock_entity: counter.logan_histoires_bonus   # facultatif : jouable seulement avec des étoiles bonus
 light_entity: light.chambre_logan              # facultatif
 ```
 
@@ -37,6 +38,8 @@ light_entity: light.chambre_logan              # facultatif
 | `sound` | `true` | Petits sons |
 | `best_score_entity` | | `input_number` (ou `number`) où enregistrer le meilleur score — prévoir un maximum de 99999 |
 | `light_entity` | | Lumière qui clignote à chaque niveau réussi |
+| `unlock_entity` | | Compteur d'étoiles bonus (`counter`, `input_number`, `number` ou `sensor`) : une nouvelle partie ne peut être lancée que s'il y en a au moins `unlock_min`. Jouer ne dépense aucune étoile ; une partie commencée continue jusqu'au bout |
+| `unlock_min` | `1` | Nombre d'étoiles minimum pour jouer |
 | `theme` | `auto` | `auto`, `light`, `dark` |
 
 Le bloc « Nuance de couleur » est identique à celui des autres cartes.
