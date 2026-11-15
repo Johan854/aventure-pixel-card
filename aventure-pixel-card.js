@@ -8,7 +8,7 @@
  * meilleur score mémorisé (et facultativement envoyé dans un input_number).
  * Style verre, thème clair/sombre automatique, éditeur visuel, textes en français.
  */
-const CARD_VERSION = "1.0.0";
+const CARD_VERSION = "1.0.1";
 
 /* === NUANCE COMMUNE v2 (cartes Johan854) === */
 const GV_NUANCES = [["braise", "Braise (rouge)", "#e0524f"], ["ocean", "Océan (bleu)", "#2f8fd8"], ["lagon", "Lagon (turquoise)", "#1fb5a8"], ["foret", "Forêt (vert)", "#3fae5a"], ["lavande", "Lavande (violet)", "#8a63d8"], ["framboise", "Framboise (rose)", "#e05597"], ["ambre", "Ambre (orange)", "#e8902c"], ["ardoise", "Ardoise (neutre)", "#7d8595"]];
@@ -397,6 +397,7 @@ class Game {
     if (this.state === "titre" || this.state === "fin") { this.level = 1; this.score = 0; this.items = 0; this.lives = this.cfg.lives; this.build(); }
     else if (this.state === "perdu") this.build();
     else if (this.state === "gagne") { this.level++; this.build(); }
+    Object.keys(this.keys).forEach((k) => { this.keys[k] = false; }); this.jPrev = false; this.fPrev = false;
     this.state = "jeu"; this.t = 0;
   }
   step() {
@@ -407,7 +408,7 @@ class Game {
     const ax = (k.r ? 1 : 0) - (k.l ? 1 : 0);
     if (ax) { p.vx += ax * 0.25; p.face = ax; } else p.vx *= p.ground ? 0.75 : 0.95;
     p.vx = Math.max(-sp, Math.min(sp, p.vx)); if (Math.abs(p.vx) < 0.05) p.vx = 0;
-    if (k.j && !this.jPrev && p.ground) { p.vy = -5.2; this.snd(520, 0.12, "square", 0.04, 260); }
+    if (k.j && !this.jPrev && p.ground) { p.vy = -6.0; this.snd(520, 0.12, "square", 0.04, 260); }
     if (!k.j && p.vy < -2) p.vy += 0.5; // saut plus court si on relâche
     this.jPrev = k.j;
     p.vy = Math.min(p.vy + 0.28, 6);
@@ -440,7 +441,7 @@ class Game {
       this.shots.forEach((s) => { if (s.l > 0 && s.x < hb.x + hb.w && s.x + s.w > hb.x && s.y < hb.y + hb.h && s.y + s.h > hb.y) { s.l = 0; this.kill(e, 100); } });
       if (!e.alive) return;
       if (p.x < hb.x + hb.w && p.x + p.w > hb.x && p.y < hb.y + hb.h && p.y + p.h > hb.y) {
-        if (p.vy > 0.5 && p.y + p.h - p.vy <= hb.y + 4) { this.kill(e, 100); p.vy = k.j ? -5 : -3.2; }
+        if (p.vy > 0.5 && p.y + p.h - p.vy <= hb.y + 4) { this.kill(e, 100); p.vy = k.j ? -5.6 : -3.4; }
         else this.hurt();
       }
     });
@@ -631,8 +632,10 @@ class AventurePixelCard extends HTMLElement {
     if (/INPUT|TEXTAREA|SELECT/.test(tag)) return;
     if (down && (e.code === "KeyP" || e.code === "Escape")) { if (this._game.state === "jeu") this._pause(); else if (this._game.state === "pause") this._go(); return; }
     if (down && (e.code === "Enter" || e.code === "Space") && this._game.state !== "jeu") { e.preventDefault(); this._unlock(); this._go(); return; }
-    const k = map[e.code]; if (!k || this._game.state !== "jeu") return;
-    e.preventDefault(); this._game.keys[k] = down;
+    const k = map[e.code]; if (!k) return;
+    if (!down) { this._game.keys[k] = false; return; }
+    if (this._game.state !== "jeu") return;
+    e.preventDefault(); this._game.keys[k] = true;
   }
   _pause() { if (this._game.state !== "jeu") return; this._game.state = "pause"; Object.keys(this._game.keys).forEach((k) => { this._game.keys[k] = false; }); this._msg("pause"); }
   _go() {
@@ -653,6 +656,7 @@ class AventurePixelCard extends HTMLElement {
   _msg(kind) {
     const r = this.shadowRoot, m = r.getElementById("msg"), g = this._game, th = THEMES[this._config.hero];
     if (!kind) { m.hidden = true; return; }
+    Object.keys(g.keys).forEach((k) => { g.keys[k] = false; }); r.querySelectorAll(".pad button.on").forEach((b) => b.classList.remove("on"));
     const tx = {
       titre: [th.title, `Aide ${th.hero} à ramasser des ${th.itemName} jusqu'au drapeau. Saute sur les ennemis, attrape le bloc surprise pour pouvoir tirer.`, "Jouer"],
       pause: ["Pause", "Le jeu attend sagement.", "Reprendre"],
